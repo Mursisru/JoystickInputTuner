@@ -1,0 +1,11 @@
+{
+  "LoggingEnabled": true,
+  "ResetLogOnStartup": true,
+  "ShowFilterHints": true,
+  "AutoApplyInApp": true,
+  "StartWithWindows": false,
+  "AppliedProfileName": "T.A320 Pilot",
+  "UiLanguage": "RU",
+  "OutputSink": "vJoy",
+  "VJoyDeviceId": 1
+}

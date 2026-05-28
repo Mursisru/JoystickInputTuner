@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\JoystickInputTuner.Core\JoystickInputTuner.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SharpDX.DirectInput" Version="4.2.0" />
+    <PackageReference Include="Vortice.DirectInput" Version="3.8.3" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('..\..\lib\vJoy\x64\vJoyInterface.dll')">
+    <None Include="..\..\lib\vJoy\x64\vJoyInterface.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>vJoyInterface.dll</Link>
+    </None>
+  </ItemGroup>
+
+  <Target Name="CopyVJoyInterfaceFromInstall" AfterTargets="Build">
+    <PropertyGroup>
+      <_VJoyDll Condition="Exists('..\..\lib\vJoy\x64\vJoyInterface.dll')">..\..\lib\vJoy\x64\vJoyInterface.dll</_VJoyDll>
+      <_VJoyDll Condition="'$(_VJoyDll)' == '' and Exists('C:\Program Files\vJoy\x64\vJoyInterface.dll')">C:\Program Files\vJoy\x64\vJoyInterface.dll</_VJoyDll>
+      <_VJoyDll Condition="'$(_VJoyDll)' == '' and Exists('C:\Program Files (x86)\vJoy\x64\vJoyInterface.dll')">C:\Program Files (x86)\vJoy\x64\vJoyInterface.dll</_VJoyDll>
+    </PropertyGroup>
+    <Copy Condition="'$(_VJoyDll)' != ''"
+          SourceFiles="$(_VJoyDll)"
+          DestinationFiles="$(OutDir)vJoyInterface.dll"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

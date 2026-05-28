@@ -1,0 +1,81 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\JoystickInputTuner.Core\JoystickInputTuner.Core.csproj" />
+    <ProjectReference Include="..\JoystickInputTuner.Input\JoystickInputTuner.Input.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <!-- Pre-release mirror: PR-R; Engine uses DEV with same CycleBuildNumber / SubNumber -->
+    <InformationalVersion>1.0.0 Build PR-R2P34</InformationalVersion>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <PublishTrimmed>false</PublishTrimmed>
+    <PortableOutputDir>$(MSBuildThisFileDirectory)..\..\Portable\</PortableOutputDir>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(IsPortableBuild)' == 'true'">
+    <DefineConstants>$(DefineConstants);PORTABLE_DISTRIBUTION</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Defaults\portable-appsettings.json" />
+    <EmbeddedResource Include="Defaults\default-profile.json" />
+    <EmbeddedResource Include="Defaults\ta320-pilot-profile.json" />
+  </ItemGroup>
+
+  <Target Name="BuildPortableExecutable"
+          AfterTargets="Build"
+          Condition="'$(DisablePortableOnBuild)' != 'true' and '$(IsPortableBuild)' != 'true'">
+    <Message Text="Building portable single-file executable to $(PortableOutputDir)" Importance="high" />
+    <MSBuild Projects="$(MSBuildProjectFullPath)"
+             Targets="Publish"
+             Properties="Configuration=$(Configuration);RuntimeIdentifier=win-x64;PublishSingleFile=true;SelfContained=true;IncludeNativeLibrariesForSelfExtract=true;PublishTrimmed=false;PublishDir=$(PortableOutputDir);IsPortableBuild=true" />
+  </Target>
+
+  <Target Name="CopyVJoyToPortablePublish"
+          AfterTargets="Publish"
+          Condition="'$(IsPortableBuild)' == 'true'">
+    <Copy Condition="Exists('$(MSBuildThisFileDirectory)..\JoystickInputTuner.Input\bin\$(Configuration)\net10.0\vJoyInterface.dll')"
+          SourceFiles="$(MSBuildThisFileDirectory)..\JoystickInputTuner.Input\bin\$(Configuration)\net10.0\vJoyInterface.dll"
+          DestinationFiles="$(PublishDir)vJoyInterface.dll"
+          SkipUnchangedFiles="true" />
+    <Copy Condition="!Exists('$(PublishDir)vJoyInterface.dll') and Exists('C:\Program Files\vJoy\x64\vJoyInterface.dll')"
+          SourceFiles="C:\Program Files\vJoy\x64\vJoyInterface.dll"
+          DestinationFiles="$(PublishDir)vJoyInterface.dll"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="SeedPortableData"
+          AfterTargets="BuildPortableExecutable"
+          Condition="'$(DisablePortableOnBuild)' != 'true' and '$(IsPortableBuild)' != 'true'">
+    <Message Text="Seeding default _Data for portable build (EN + default settings)" Importance="high" />
+    <RemoveDir Directories="$(PortableOutputDir)_Data" Condition="Exists('$(PortableOutputDir)_Data')" />
+    <MakeDir Directories="$(PortableOutputDir)_Data\profiles;$(PortableOutputDir)_Data\logs" />
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)Defaults\portable-appsettings.json"
+          DestinationFiles="$(PortableOutputDir)_Data\appsettings.json" />
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)Defaults\default-profile.json"
+          DestinationFiles="$(PortableOutputDir)_Data\profiles\Default.json" />
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)Defaults\ta320-pilot-profile.json"
+          DestinationFiles="$(PortableOutputDir)_Data\profiles\T.A320 Pilot.json" />
+    <Copy Condition="Exists('$(MSBuildThisFileDirectory)..\JoystickInputTuner.Input\bin\$(Configuration)\net10.0\vJoyInterface.dll')"
+          SourceFiles="$(MSBuildThisFileDirectory)..\JoystickInputTuner.Input\bin\$(Configuration)\net10.0\vJoyInterface.dll"
+          DestinationFiles="$(PortableOutputDir)vJoyInterface.dll"
+          SkipUnchangedFiles="true" />
+    <Copy Condition="Exists('C:\Program Files\vJoy\x64\vJoyInterface.dll') and !Exists('$(PortableOutputDir)vJoyInterface.dll')"
+          SourceFiles="C:\Program Files\vJoy\x64\vJoyInterface.dll"
+          DestinationFiles="$(PortableOutputDir)vJoyInterface.dll"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

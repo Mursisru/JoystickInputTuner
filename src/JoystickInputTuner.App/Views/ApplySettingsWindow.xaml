@@ -1,0 +1,39 @@
+<Window x:Class="JoystickInputTuner.App.Views.ApplySettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Apply Settings"
+        Width="460"
+        Height="260"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        Background="#1F1F1F"
+        Foreground="#F3F3F3">
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Apply profile settings to startup behavior" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,12"/>
+
+        <StackPanel Grid.Row="1" Margin="0,0,0,8">
+            <TextBlock Text="Profile name"/>
+            <TextBox x:Name="ProfileNameTextBox" Height="30" Margin="0,6,0,0"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Margin="0,0,0,8">
+            <TextBlock Text="Apply mode" Margin="0,0,0,6"/>
+            <RadioButton x:Name="AutoInAppRadioButton" GroupName="ApplyMode" IsChecked="True"
+                         Content="No Windows startup. Auto-apply when opening this app." Margin="0,0,0,6"/>
+            <RadioButton x:Name="WindowsStartupRadioButton" GroupName="ApplyMode"
+                         Content="Use Windows startup agent. Auto-apply at system startup."/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="CancelButton" Width="90" Height="32" Margin="0,0,8,0" Content="Cancel" Click="CancelButton_OnClick"/>
+            <Button x:Name="ApplyButton" Width="90" Height="32" Content="Apply" Click="ApplyButton_OnClick"/>
+        </StackPanel>
+    </Grid>
+</Window>

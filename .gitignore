@@ -1,0 +1,26 @@
+# Build artifacts
+bin/
+obj/
+.vs/
+
+# User-specific files
+*.user
+*.suo
+
+# Runtime data
+_Data/
+
+# Portable build output (exe too large for GitHub; build locally)
+Portable/JoystickInputTuner.App.exe
+Portable/*.pdb
+Portable/_Data/
+
+# Native binaries (optional lib copy tracked separately)
+lib/vJoy/**/*.dll
+
+# Test / coverage artifacts
+TestResults/
+*.trx
+coverage/
+*.coverage
+*.coveragexml

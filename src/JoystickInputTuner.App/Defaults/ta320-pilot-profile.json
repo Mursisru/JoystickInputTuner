@@ -1,0 +1,106 @@
+{
+  "Name": "T.A320 Pilot",
+  "DeviceId": "",
+  "DeviceName": "",
+  "AxisName": "RZ",
+  "PollingHz": 175,
+  "OutputSink": "vJoy",
+  "VJoyDeviceId": 1,
+  "Calibration": {
+    "Min": -1.0,
+    "Center": 0.0,
+    "Max": 1.0
+  },
+  "Filters": {
+    "Deadzone": {
+      "Enabled": true,
+      "Dynamic": false,
+      "Radius": 0.03,
+      "DynamicMultiplier": 0.6
+    },
+    "Median": {
+      "Enabled": true,
+      "WindowSize": 5
+    },
+    "Hampel": {
+      "Enabled": true,
+      "WindowSize": 9,
+      "SigmaMultiplier": 3.0
+    },
+    "SpikeGate": {
+      "Enabled": true,
+      "RadialZonesEnabled": true,
+      "CenterZoneEnd": 0.26,
+      "CenterDeltaThreshold": 0.038,
+      "CenterSmoothingMultiplier": 0.55,
+      "CenterVelocityThresholdPerSecond": 2.0,
+      "CenterMaxConsecutiveSuppressions": 8,
+      "OuterDeltaThreshold": 0.52,
+      "OuterVelocityThresholdPerSecond": 18.0,
+      "ZoneBlendWidth": 0.12,
+      "DeltaThreshold": 0.52,
+      "VelocityThresholdPerSecond": 18.0,
+      "MaxConsecutiveSuppressions": 1,
+      "UltraSpikeGuardEnabled": true,
+      "UltraSpikeCenterMaxAbs": 0.20,
+      "UltraSpikeDeltaThreshold": 0.012,
+      "UltraSpikeVelocityThresholdPerSecond": 2.2,
+      "UltraSpikeMaxConsecutiveSuppressions": 16,
+      "SwingBypassEnabled": true,
+      "SwingBypassMinAbs": 0.32,
+      "SwingBypassDeltaThreshold": 0.52,
+      "SwingBypassVelocityThresholdPerSecond": 18.0,
+      "SwingBypassMaxConsecutiveSuppressions": 1,
+      "RailHoldEnabled": true,
+      "RailThreshold": 0.90,
+      "RailFlipMinDelta": 0.85,
+      "OuterMaxConsecutiveSuppressions": 6
+    },
+    "ZImpulseGuard": {
+      "Enabled": true,
+      "CenterRadius": 0.35,
+      "IntentThreshold": 0.05,
+      "ConfirmSamples": 3
+    },
+    "AxisIntent": {
+      "Enabled": true,
+      "DeflectionThreshold": 0.07,
+      "ReleaseRatio": 0.55,
+      "StrongDeflectionThreshold": 0.35,
+      "ConfirmSamples": 2,
+      "ConfirmSamplesWhileOthersActive": 6,
+      "DisableInstantIntentWhileOthersActive": true
+    },
+    "CrossAxisShield": {
+      "Enabled": true,
+      "TargetAxisId": "SELECTED",
+      "WatchedAxes": [ "X", "Y" ],
+      "OtherAxisDeflectionThreshold": 0.08,
+      "MinOtherAxisActiveSamples": 1,
+      "ReleaseThresholdRatio": 0.45,
+      "BlockEngageRatio": 0.65,
+      "FullBlockDeflectionMultiplier": 1.8,
+      "LockSmoothingSeconds": 0.010,
+      "ReleaseSmoothingSeconds": 0.040,
+      "RequireOtherAxisDominance": false,
+      "OtherAxisDominanceRatio": 1.15,
+      "RespectTargetIntent": true,
+      "ParasiticClampLeakMultiplier": 0.0,
+      "MinOtherAxisVelocityPerSecond": 0.30,
+      "MaxOtherAxisVelocityPerSecond": 30.0,
+      "RateLimitMultiplierWhenActive": 0.18,
+      "EmaAlphaMultiplierWhenActive": 0.22,
+      "HardLockWhenActive": true,
+      "HardLockForceCenter": true,
+      "LockLeakMultiplier": 0.0
+    },
+    "RateLimiter": {
+      "Enabled": true,
+      "MaxDeltaPerSecond": 8.0
+    },
+    "Ema": {
+      "Enabled": true,
+      "Alpha": 0.40
+    }
+  }
+}

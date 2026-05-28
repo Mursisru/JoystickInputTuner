@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/JoystickInputTuner.App/JoystickInputTuner.App.csproj" />
+    <Project Path="src/JoystickInputTuner.Core/JoystickInputTuner.Core.csproj" />
+    <Project Path="src/JoystickInputTuner.Input/JoystickInputTuner.Input.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/JoystickInputTuner.Core.Tests/JoystickInputTuner.Core.Tests.csproj" />
+  </Folder>
+</Solution>
