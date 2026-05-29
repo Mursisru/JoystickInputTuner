@@ -49,6 +49,32 @@ internal sealed class MonitorChartAxes
         _axisEnabled[axisId.ToUpperInvariant()] = enabled;
     }
 
+    public string[] GetEnabledAxisIdsSnapshot()
+    {
+        var enabled = new List<string>(AxisOrder.Length);
+        foreach (var axisId in AxisOrder)
+        {
+            if (IsAxisEnabled(axisId))
+                enabled.Add(axisId);
+        }
+
+        return enabled.ToArray();
+    }
+
+    public void ApplyEnabledAxisSnapshot(IReadOnlyList<string>? enabledAxes)
+    {
+        if (enabledAxes == null || enabledAxes.Count == 0)
+        {
+            foreach (var axisId in AxisOrder)
+                _axisEnabled[axisId] = true;
+            return;
+        }
+
+        var enabledSet = new HashSet<string>(enabledAxes, StringComparer.OrdinalIgnoreCase);
+        foreach (var axisId in AxisOrder)
+            _axisEnabled[axisId] = enabledSet.Contains(axisId);
+    }
+
     public IReadOnlyList<string> GetVisibleOverlayAxisIds(string? selectedAxisId)
     {
         var visible = new List<string>(AxisOrder.Length);

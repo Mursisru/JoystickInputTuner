@@ -15,20 +15,12 @@ public sealed class FilterSessionStore
 
     public string FilePath => AppDataPaths.FiltersFilePath;
 
-    public async Task SaveAsync(
-        FilterSettings filters,
-        string profileName,
-        bool userModified = true,
-        CancellationToken cancellationToken = default)
+    public async Task SaveAsync(FilterSessionState state, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(filters);
-        var state = new FilterSessionState
-        {
-            SavedAt = DateTimeOffset.UtcNow,
-            ProfileName = profileName,
-            UserModified = userModified,
-            Filters = filters
-        };
+        ArgumentNullException.ThrowIfNull(state);
+        state.SchemaVersion = FilterSessionState.CurrentSchemaVersion;
+        state.SavedAt = DateTimeOffset.UtcNow;
+        state.Filters = FilterSettingsNormalizer.Ensure(state.Filters);
 
         var directory = Path.GetDirectoryName(FilePath);
         if (!string.IsNullOrWhiteSpace(directory))
@@ -50,10 +42,17 @@ public sealed class FilterSessionStore
             return null;
 
         state.Filters = FilterSettingsNormalizer.Ensure(state.Filters);
+        state.Calibration ??= new CalibrationSettings();
 
         // Legacy files (before UserModified) were always written after user tweaks.
         if (!state.UserModified)
             state.UserModified = true;
+
+        state.MonitorChartEnabledAxes ??= [];
+        state.Ui ??= new SessionUiPreferences();
+
+        if (state.SchemaVersion < 1)
+            state.SchemaVersion = 1;
 
         return state;
     }

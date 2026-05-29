@@ -4,53 +4,46 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-Pre-release (this repo): **1.0.0 Build PR-R2P34**  
-Development (Engine): **1.0.0 Build DEV2P34**
+Pre-release (this repo): **2.1.3 Build PR-R3P1**  
+Development (Engine): **2.1.3 Build DEV3P1**
+
+## [2.1.3] — 2026-05-28
+
+Pre-release (GitHub local): **2.1.3 Build PR-R3P1** · Development (Engine): **2.1.3 Build DEV3P1**
 
 ### Added
 
-- **Monitor chart overlays:** all other joystick axes as semi-transparent raw lines on the same graph as the stream axis.
-- **Monitor axis toggles:** checkboxes (X, Y, Z, RX, RY, RZ, SL0, SL1) to enable/disable each overlay; stream axis shown on Raw/Filtered only.
-- **Diagnostics — chart axes:** `chartStream`, `chartOverlay`, per-axis `chart_*` values in `movement` / `monitor` logs; `chart-axes` events on toggle, stream start, and axis change.
-- **Spike gate RailHold** — hold output when raw flips sign near rail (electrical noise on saturated axes).
-- **Output settle** filter and tighter vJoy publish deadband for idle stability.
-- **vJoy busy recovery** — stale handle release and clearer status when device #1 is in use.
-- **T.A320 Pilot** embedded default profile (`ta320-pilot-profile.json`) and portable appsettings seed (RU, auto-apply).
-- **Filter session** (`_Data/filters.json`): debounced save, restore after profile auto-apply, force save on Stop / close / Save profile / Apply.
-- `FilterSettingsSnapshot` deep clone; `ApplyFilterSettings` / `CaptureFilterSettingsFromUi` for full UI ↔ pipeline sync.
-- **Ultra-Spike Guard** (center) and **Swing Bypass** (pass large deliberate stick throws with relaxed thresholds).
-- **Axis intent** tracking and **CrossAxisLockSmoother** for gradual hard-lock transitions.
-- **Diagnostics log**: natural/filtered values, block strength, cross-axis peaks, full settings snapshot (`FilterSettingsLogFormatter`).
-- **Log reset**: optional clear on startup (`ResetLogOnStartup`) and **Clear log** button in Settings.
-- **App version** in code (`AppVersion.cs`), window title, UI subtitle, and startup log.
-- **Radial spike zones**, center smoothing multiplier, fine delta sliders for spike gate.
-- Dedicated **DirectInput poll thread** and single-axis read path.
-- **History ring buffer** for monitor graph (records all axes while stream is running).
-- **Monitor-only mode** (no vJoy while tuning).
-- **Z impulse protection** and **cross-axis shield** (variable block 0..1) with **hard lock** + leak multiplier.
-- `tools/VJoyDiag` smoke-test; optional `lib/vJoy/x64/vJoyInterface.dll`.
+- **Background agent** (`--agent`) — hidden process continues filtering after the main window closes; Windows startup registration unchanged.
+- **Handoff** — with stream running and an applied profile, closing the UI saves session/preferences and spawns `exe --agent --delay-ms=1500` to resume vJoy output without reboot.
+- **Filter session v3** (`_Data/filters.json`) — persists filters plus device/axis/polling, calibration, monitor axis toggles, and UI preferences (language, sink, vJoy id, logging, auto-apply).
+- **Axis bind lock** — lock the stream axis at center via joystick button, keyboard key, or mouse button (toggle on press); **Reset bind**; requires **Start** and lock enabled.
+- **Agent window chrome** — agent process starts with no visible main window (no `StartupUri` flash during handoff).
+- **Monitor chart overlays** — other device axes as semi-transparent raw lines; per-axis checkboxes (X, Y, Z, RX, RY, RZ, SL0, SL1).
+- **Diagnostics — chart axes:** `chartStream`, `chartOverlay`, per-axis `chart_*` in movement/monitor logs; `chart-axes` events.
+- **Spike gate RailHold**, **Output settle**, **vJoy busy recovery** (stale handle release).
+- **T.A320 Pilot** embedded profile and portable appsettings seed (RU, auto-apply).
+- **Ultra-Spike Guard**, **Swing Bypass**, **Axis intent**, **CrossAxisLockSmoother**.
+- **Filter session** (v1–v2): debounced save, `FilterSettingsSnapshot`, restore after profile auto-apply.
+- **Log reset** on startup and **Clear log** in Settings; **App version** in title and startup log.
+- **Z impulse guard**, **cross-axis shield** (hard lock + leak), radial spike zones, dedicated poll thread, monitor history ring buffer.
 
 ### Changed
 
-- Default poll rate **175 Hz**; vJoy deadband + synchronous `Publish()` on hot path.
-- **Monitor:** overlay history recorded whenever stream is running (not only when Monitor tab is open); legend shows stream axis on Raw/Filtered lines only.
-- **Hard-lock:** ignore saturated watched axes (±1); correlated RZ↔XY crosstalk block; skip dominance when XY latched; instant snap when leak = 0.
-- `FilterSettingsNormalizer`: watched axes **X,Y** only; zero cross leak when hard lock enabled.
-- **EMA / Rate limiter:** adaptive smoothing; motion bypass for median/hampel; center snap tweaks.
-- **Spike gate:** quiet-zone gating, motion hysteresis, radial zone blend (`FilterRadial`).
-- Filter session save **suppressed until `OnLoaded`** completes (prevents overwriting `filters.json` with defaults).
-- T.A320 Pilot profile: outer spike / rail-hold tuning for yaw stability.
+- Default poll rate **175 Hz**; vJoy deadband and synchronous publish on hot path.
+- **Hard-lock:** saturated watched axes ignored; RZ↔XY crosstalk fixes; instant snap when leak = 0.
+- `FilterSettingsNormalizer`: all standard axes (X, Y, Z, RX, RY, RZ, SL0, SL1); **bind lock binding is not cleared** on sanitize.
+- Monitor records overlay history whenever stream runs; legend shows stream axis on Raw/Filtered only.
+- Handoff UI hides immediately; shutdown via `Application.Shutdown()` after spawn.
+- Release base semver **2.1.3** (from 2.0.0 dev cycle).
 
 ### Fixed
 
-- Monitor overlay axes empty while legend worked (history only recorded when Monitor tab was bound).
-- Startup crash when filter save timer ran before `InitializeComponent()`.
-- Monitor graph / status read `PollingSlider` from poll thread (now cached at Start).
-- `filters.json` not persisting or restoring correctly (timer race, incomplete snapshot, missing `LoadSettings` on restore).
-- Profile **Save** wrote incomplete filter fields (hidden shield / ultra-spike settings).
-- Parasitic yaw leak when `RequireOtherAxisDominance` and RZ ≈ XY peak (crosstalk); log showed `block=0` with active XY.
-- Filter lag / center ringing / spike delta slider stuck at extremes (earlier iterations).
-- vJoy “device in use” without recovery path; graph vibration at idle (settle + rail hold + profile).
+- Agent process in Task Manager without active filtering (workflow requires **Apply** + `AgentResumeStream` prefs).
+- Main window **re-opening briefly** when handing off to agent (`StartupUri` + late `Hide()`).
+- `filters.json` not saving/restoring all tabs; `FilterPipeline.LoadSettings` missing **AxisBindLock**.
+- `FilterSettingsNormalizer` trimming watched axes to X/Y only.
+- Monitor overlay empty while legend worked; startup timer crash; poll thread reading `PollingSlider`.
+- Parasitic yaw when dominance + RZ ≈ XY; vJoy device-in-use without recovery; profile save incomplete fields.
 
 ## [1.0.0] — 2026-05-26
 

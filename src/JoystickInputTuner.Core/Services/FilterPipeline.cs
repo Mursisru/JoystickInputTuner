@@ -88,6 +88,7 @@ public sealed class FilterPipeline
         Settings.ZImpulseGuard = clone.ZImpulseGuard;
         Settings.AxisIntent = clone.AxisIntent;
         Settings.CrossAxisShield = clone.CrossAxisShield;
+        Settings.AxisBindLock = clone.AxisBindLock;
         Settings.RateLimiter = clone.RateLimiter;
         Settings.Ema = clone.Ema;
     }

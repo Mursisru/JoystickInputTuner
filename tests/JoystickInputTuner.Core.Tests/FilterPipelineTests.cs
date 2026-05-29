@@ -512,4 +512,26 @@ public class FilterPipelineTests
         Assert.Equal(0.0, sample.FilteredValue, 6);
     }
 
+    [Fact]
+    public void LoadSettings_RestoresAxisBindLock()
+    {
+        var pipeline = new FilterPipeline();
+        pipeline.LoadSettings(new FilterSettings
+        {
+            AxisBindLock = new()
+            {
+                Enabled = true,
+                BindDeviceKind = "Joystick",
+                BindDeviceId = "device-guid",
+                ButtonIndex = 3,
+                KeyCode = -1,
+            }
+        });
+
+        Assert.True(pipeline.Settings.AxisBindLock.Enabled);
+        Assert.Equal("Joystick", pipeline.Settings.AxisBindLock.BindDeviceKind);
+        Assert.Equal("device-guid", pipeline.Settings.AxisBindLock.BindDeviceId);
+        Assert.Equal(3, pipeline.Settings.AxisBindLock.ButtonIndex);
+    }
+
 }

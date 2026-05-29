@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -76,6 +77,12 @@ public partial class MainWindow : Window
     private int _otherAxisSustainedSamples;
     private DateTimeOffset _lastPollTimestamp;
     private int _streamPollingHz = 175;
+    private bool _axisBindLockToggleLatched;
+    private bool _axisBindLockPreviousPressed;
+    private bool _axisBindLockActive;
+    private bool _closeAfterHandoff;
+    private bool _handoffInProgress;
+    private bool _agentSpawnedForHandoff;
 
     public MainWindow()
     {
@@ -88,6 +95,8 @@ public partial class MainWindow : Window
 
         _suppressFilterSessionSave = true;
         InitializeComponent();
+        if (App.IsAgentMode)
+            AgentWindowChrome.ApplyBeforeShow(this);
         Title = $"JoystickInputTuner — {AppVersion.Display}";
 
         _inputProvider = new DirectInputProvider();
@@ -114,6 +123,7 @@ public partial class MainWindow : Window
 
         _inputProvider.ReadingAvailable += InputProviderOnReadingAvailable;
         Loaded += MainWindow_OnLoaded;
+        Closing += MainWindow_OnClosing;
         IsVisibleChanged += (_, _) => UpdateMonitorUiEnabled();
         MainTabControl.SelectionChanged += MainTabControl_OnSelectionChanged;
 
@@ -286,6 +296,40 @@ public partial class MainWindow : Window
                 ["RU"] = "Уже отображается линиями Raw/Filtered",
                 ["EN"] = "Already shown on Raw/Filtered lines"
             },
+            ["monitor.legendDeviceRaw"] = new() { ["RU"] = "сырой вход устройства", ["EN"] = "device raw input" },
+            ["header.axisBindLock"] = new() { ["RU"] = "Блокировка оси кнопкой", ["EN"] = "Axis lock by button" },
+            ["check.axisBindLockEnabled"] = new()
+            {
+                ["RU"] = "Полностью блокировать выбранную ось (центр) при активном бинде",
+                ["EN"] = "Fully lock selected axis at center when bind is active"
+            },
+            ["btn.axisBindLock"] = new() { ["RU"] = "Назначить кнопку…", ["EN"] = "Bind button…" },
+            ["btn.axisBindReset"] = new() { ["RU"] = "Сброс бинда", ["EN"] = "Reset bind" },
+            ["hint.axisBindLock"] = new()
+            {
+                ["RU"] = "Нужен запущенный Start. «Назначить» — кнопка джойстика, клавиша или кнопка мыши (5 сек). Первое нажатие бинда включает блокировку оси в центре, второе — выключает.",
+                ["EN"] = "Requires Start running. Bind: joystick button, key, or mouse button (5 sec). First bind press locks the stream axis to center; second press unlocks."
+            },
+            ["label.axisBindNotSet"] = new() { ["RU"] = "Бинд: не назначен", ["EN"] = "Bind: not set" },
+            ["label.axisBindJoystick"] = new() { ["RU"] = "Бинд: {0}, кн. {1}", ["EN"] = "Bind: {0}, btn {1}" },
+            ["label.axisBindKeyboard"] = new() { ["RU"] = "Бинд: клавиатура, {0}", ["EN"] = "Bind: keyboard, {0}" },
+            ["label.axisBindMouse"] = new() { ["RU"] = "Бинд: мышь, {0}", ["EN"] = "Bind: mouse, {0}" },
+            ["label.axisBindLocked"] = new() { ["RU"] = " (блокировка ВКЛ)", ["EN"] = " (lock ON)" },
+            ["label.axisBindUnlocked"] = new() { ["RU"] = " (блокировка выкл)", ["EN"] = " (lock off)" },
+            ["status.bindAxisDoneJoystick"] = new() { ["RU"] = "Бинд: {0}, кн. {1}", ["EN"] = "Bound: {0}, btn {1}" },
+            ["status.bindAxisDoneKeyboard"] = new() { ["RU"] = "Бинд: клавиша {0}", ["EN"] = "Bound: key {0}" },
+            ["status.bindAxisDoneMouse"] = new() { ["RU"] = "Бинд: мышь, {0}", ["EN"] = "Bound: mouse, {0}" },
+            ["status.bindAxisWaiting"] = new()
+            {
+                ["RU"] = "Нажми кнопку на любом контроллере (5 сек)…",
+                ["EN"] = "Press a button on any controller (5 sec)…"
+            },
+            ["status.bindAxisDone"] = new() { ["RU"] = "Бинд: {0}, кнопка {1}", ["EN"] = "Bound: {0}, button {1}" },
+            ["status.bindAxisFail"] = new()
+            {
+                ["RU"] = "Кнопка не назначена. Выбери устройство и нажми кнопку на джойстике.",
+                ["EN"] = "No button captured. Select device and press a joystick button."
+            },
             ["metric.raw"] = new() { ["RU"] = "Сырой", ["EN"] = "Raw" },
             ["metric.filtered"] = new() { ["RU"] = "Фильтрованный", ["EN"] = "Filtered" },
             ["metric.delta"] = new() { ["RU"] = "Дельта", ["EN"] = "Delta" },
@@ -391,6 +435,17 @@ public partial class MainWindow : Window
         SaveProfileButton.Content = T("btn.saveProfile");
         LoadProfileButton.Content = T("btn.loadProfile");
         MovementHintTextBlock.Text = T("hint.moveAxis");
+        if (AxisBindLockHeaderTextBlock != null)
+            AxisBindLockHeaderTextBlock.Text = T("header.axisBindLock");
+        if (AxisBindLockEnabledCheckBox != null)
+            AxisBindLockEnabledCheckBox.Content = T("check.axisBindLockEnabled");
+        if (AxisBindLockBindButton != null)
+            AxisBindLockBindButton.Content = T("btn.axisBindLock");
+        if (AxisBindLockClearButton != null)
+            AxisBindLockClearButton.Content = T("btn.axisBindReset");
+        if (AxisBindLockHintTextBlock != null)
+            AxisBindLockHintTextBlock.Text = T("hint.axisBindLock");
+        UpdateAxisBindLockStatusText();
 
         InputTab.Header = T("tab.input");
         FiltersTab.Header = T("tab.filters");
@@ -592,13 +647,13 @@ public partial class MainWindow : Window
             LoadProfilesListFromDisk();
             await RefreshDevicesAsync().ConfigureAwait(true);
 
-            if (_preferences.AutoApplyInApp && !string.IsNullOrWhiteSpace(_preferences.AppliedProfileName))
+            var sessionRestored = await TryRestoreFilterSessionAsync().ConfigureAwait(true);
+            if (!sessionRestored &&
+                _preferences.AutoApplyInApp &&
+                HasCommittedAppliedProfile())
                 await AutoApplyProfileAsync(startStream: false).ConfigureAwait(true);
 
-            await TryRestoreFilterSessionAsync().ConfigureAwait(true);
-
-            if (_preferences.AutoApplyInApp && !string.IsNullOrWhiteSpace(_preferences.AppliedProfileName) && !_isRunning)
-                await StartStreamFromAutoApplyAsync().ConfigureAwait(true);
+            await TryRunBackgroundStreamWorkflowAsync().ConfigureAwait(true);
             LogCurrentSettings();
             _diagnostics.LogAppEvent("ui-ready", "main-window loaded");
             BindMonitorChartAxes();
@@ -689,6 +744,17 @@ public partial class MainWindow : Window
         smoothed = CrossAxisShieldPolicy.ApplyHardLockOutput(shield, blockStrength, smoothed, anchor);
         if (shield.HardLockWhenActive && blockStrength >= 0.20 && Math.Abs(smoothed) < 0.006)
             smoothed = anchor;
+
+        var bindLock = _pipeline.Settings.AxisBindLock;
+        var bindLockWasActive = _axisBindLockActive;
+        _axisBindLockActive = AxisBindLockEvaluator.UpdateLockActive(
+            bindLock,
+            e.BindLockPressed,
+            ref _axisBindLockToggleLatched,
+            ref _axisBindLockPreviousPressed);
+        if (bindLockWasActive != _axisBindLockActive && bindLock.Enabled)
+            Dispatcher.BeginInvoke(UpdateAxisBindLockStatusText);
+        smoothed = AxisBindLockEvaluator.ApplyLock(smoothed, _axisBindLockActive, bindLock.LockAnchor);
         output = output with { FilteredValue = smoothed };
 
         if (blockStrength > 0.01)
@@ -732,7 +798,8 @@ public partial class MainWindow : Window
             currentSpikeCount - _lastLoggedSpikeCount,
             currentHampelCount - _lastLoggedHampelCount,
             chartStream,
-            chartOverlay);
+            chartOverlay,
+            _axisBindLockActive);
         _lastLoggedSpikeCount = currentSpikeCount;
         _lastLoggedHampelCount = currentHampelCount;
 
@@ -980,6 +1047,159 @@ public partial class MainWindow : Window
         }
     }
 
+    private string GetDeviceDisplayName(string deviceId)
+    {
+        var device = _devices.FirstOrDefault(d => d.Id.Equals(deviceId, StringComparison.OrdinalIgnoreCase));
+        return device?.DisplayName ?? deviceId;
+    }
+
+    private void UpdateAxisBindLockStatusText()
+    {
+        if (AxisBindLockStatusTextBlock == null)
+            return;
+
+        var bind = _pipeline.Settings.AxisBindLock;
+        if (!AxisBindLockEvaluator.HasBindAssignment(bind))
+        {
+            AxisBindLockStatusTextBlock.Text = T("label.axisBindNotSet");
+            return;
+        }
+
+        var text = FormatAxisBindLockStatus(bind);
+        if (bind.Enabled && _isRunning)
+            text += _axisBindLockActive ? T("label.axisBindLocked") : T("label.axisBindUnlocked");
+
+        AxisBindLockStatusTextBlock.Text = text;
+    }
+
+    private string FormatAxisBindLockStatus(AxisBindLockSettings bind)
+    {
+        if (string.Equals(bind.BindDeviceKind, BindInputDeviceKinds.Keyboard, StringComparison.OrdinalIgnoreCase))
+            return string.Format(T("label.axisBindKeyboard"), BindInputFormatting.GetKeyName(bind.KeyCode));
+
+        if (string.Equals(bind.BindDeviceKind, BindInputDeviceKinds.Mouse, StringComparison.OrdinalIgnoreCase))
+            return string.Format(T("label.axisBindMouse"), BindInputFormatting.GetMouseButtonName(bind.ButtonIndex));
+
+        var deviceName = GetDeviceDisplayName(bind.BindDeviceId);
+        return string.Format(T("label.axisBindJoystick"), deviceName, bind.ButtonIndex);
+    }
+
+    private BindLockPollConfig? CreateBindLockPollConfig()
+    {
+        var bind = _pipeline.Settings.AxisBindLock;
+        return BindInputFormatting.CreatePollConfig(
+            bind.Enabled,
+            bind.BindDeviceKind,
+            bind.BindDeviceId,
+            bind.ButtonIndex,
+            bind.KeyCode);
+    }
+
+    private async void AxisBindLockBindButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (AxisBindLockBindButton == null)
+            return;
+
+        AxisBindLockBindButton.IsEnabled = false;
+        SetStatus("status.bindAxisWaiting");
+        try
+        {
+            await RefreshDevicesAsync().ConfigureAwait(true);
+            var hz = Math.Max(20, (int)PollingSlider.Value);
+            var capture = await _inputProvider.CaptureNextInputBindAsync(5000, hz).ConfigureAwait(true);
+            if (capture == null)
+            {
+                SetStatus("status.bindAxisFail");
+                return;
+            }
+
+            _pipeline.Settings.AxisBindLock.BindDeviceKind = capture.DeviceKind;
+            _pipeline.Settings.AxisBindLock.BindDeviceId = capture.DeviceId;
+            _pipeline.Settings.AxisBindLock.ButtonIndex = capture.ButtonIndex;
+            _pipeline.Settings.AxisBindLock.KeyCode = capture.KeyCode;
+            _pipeline.Settings.AxisBindLock.ToggleMode = true;
+            _pipeline.Settings.AxisBindLock.Enabled = true;
+            if (AxisBindLockEnabledCheckBox != null)
+                AxisBindLockEnabledCheckBox.IsChecked = true;
+            _axisBindLockToggleLatched = false;
+            _axisBindLockPreviousPressed = false;
+            _axisBindLockActive = false;
+            OnUserFilterChanged();
+            RefreshBindLockPollingIfRunning();
+            UpdateAxisBindLockStatusText();
+            ScheduleFilterSessionSave();
+
+            SetBindCaptureStatus(capture);
+            _diagnostics.LogAppEvent(
+                "axis-bind-lock",
+                $"kind={capture.DeviceKind}; device={capture.DeviceId}; button={capture.ButtonIndex}; key={capture.KeyCode}");
+        }
+        catch (Exception ex)
+        {
+            SetStatus("status.bindAxisFail");
+            _diagnostics.LogAppEvent("axis-bind-lock-error", ex.Message);
+        }
+        finally
+        {
+            AxisBindLockBindButton.IsEnabled = true;
+        }
+    }
+
+    private void SetBindCaptureStatus(InputBindCapture capture)
+    {
+        if (string.Equals(capture.DeviceKind, BindInputDeviceKinds.Keyboard, StringComparison.OrdinalIgnoreCase))
+        {
+            SetStatus("status.bindAxisDoneKeyboard", BindInputFormatting.GetKeyName(capture.KeyCode));
+            return;
+        }
+
+        if (string.Equals(capture.DeviceKind, BindInputDeviceKinds.Mouse, StringComparison.OrdinalIgnoreCase))
+        {
+            SetStatus("status.bindAxisDoneMouse", BindInputFormatting.GetMouseButtonName(capture.ButtonIndex));
+            return;
+        }
+
+        SetStatus("status.bindAxisDoneJoystick", GetDeviceDisplayName(capture.DeviceId), capture.ButtonIndex);
+    }
+
+    private void AxisBindLockClearButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        _pipeline.Settings.AxisBindLock.BindDeviceKind = string.Empty;
+        _pipeline.Settings.AxisBindLock.BindDeviceId = string.Empty;
+        _pipeline.Settings.AxisBindLock.ButtonIndex = -1;
+        _pipeline.Settings.AxisBindLock.KeyCode = -1;
+        _axisBindLockToggleLatched = false;
+        _axisBindLockPreviousPressed = false;
+        _axisBindLockActive = false;
+        OnUserFilterChanged();
+        RefreshBindLockPollingIfRunning();
+        UpdateAxisBindLockStatusText();
+        ScheduleFilterSessionSave();
+        _diagnostics.LogAppEvent("axis-bind-lock", "button=cleared");
+    }
+
+    private void RefreshBindLockPollingIfRunning()
+    {
+        if (!_isRunning)
+            return;
+
+        if (DeviceComboBox.SelectedValue is not string deviceId || string.IsNullOrWhiteSpace(deviceId))
+            return;
+
+        if (AxisComboBox.SelectedValue is not string axisId || string.IsNullOrWhiteSpace(axisId))
+            return;
+
+        try
+        {
+            _inputProvider.Start(deviceId, axisId, _streamPollingHz, CreateBindLockPollConfig());
+            _diagnostics.LogAppEvent("axis-bind-lock", "poll-config=refreshed");
+        }
+        catch (Exception ex)
+        {
+            _diagnostics.LogAppEvent("axis-bind-lock-error", $"poll-refresh: {ex.Message}");
+        }
+    }
+
     private void MonitorAxisToggle_Changed(object sender, RoutedEventArgs e)
     {
         if (_suppressMonitorAxisToggle || sender is not CheckBox check || check.Tag is not string axisId)
@@ -987,23 +1207,47 @@ public partial class MainWindow : Window
 
         _monitorChartAxes.SetAxisEnabled(axisId, check.IsChecked == true);
         LogMonitorChartAxesSelection($"toggle {axisId}={(check.IsChecked == true ? 1 : 0)}");
+        UpdateChartLegend();
         RenderChart();
+        ScheduleFilterSessionSave();
     }
 
     private void UpdateChartLegend()
     {
-        if (LegendRawTextBlock == null || LegendFilteredTextBlock == null)
+        if (ChartLegendPanel == null)
             return;
 
-        var selectedAxis = GetActiveChartAxisId().ToUpperInvariant();
-        LegendRawTextBlock.Text = string.IsNullOrWhiteSpace(selectedAxis)
-            ? T("metric.raw")
-            : $"{T("metric.raw")} ({selectedAxis})";
-        LegendFilteredTextBlock.Text = string.IsNullOrWhiteSpace(selectedAxis)
-            ? T("metric.filtered")
-            : $"{T("metric.filtered")} ({selectedAxis})";
+        ChartLegendPanel.Children.Clear();
+
+        var streamAxis = GetActiveChartAxisId().ToUpperInvariant();
+        AddChartLegendLine($"{T("metric.raw")} ({streamAxis})", "#EF4444", fontWeight: FontWeights.SemiBold);
+        AddChartLegendLine($"{T("metric.filtered")} ({streamAxis})", "#22C55E", fontWeight: FontWeights.Bold);
+
+        foreach (var axisId in MonitorChartAxes.AxisOrder)
+        {
+            if (axisId.Equals(streamAxis, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (!_monitorChartAxes.IsAxisEnabled(axisId))
+                continue;
+
+            AddChartLegendLine(
+                $"{axisId} — {T("monitor.legendDeviceRaw")}",
+                MonitorChartAxes.GetAxisColor(axisId));
+        }
 
         SyncMonitorAxisToggles();
+    }
+
+    private void AddChartLegendLine(string text, string colorHex, FontWeight? fontWeight = null)
+    {
+        ChartLegendPanel.Children.Add(new TextBlock
+        {
+            Text = text,
+            Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(colorHex)!),
+            FontSize = 11,
+            FontWeight = fontWeight ?? FontWeights.Normal,
+            Margin = new Thickness(0, 0, 0, 3),
+        });
     }
 
     private static PointCollection BuildPoints(double[] values, int count, double width, double height)
@@ -1086,6 +1330,7 @@ public partial class MainWindow : Window
         UpdateChartLegend();
         if (_isRunning)
             LogMonitorChartAxesSelection("axis-combo");
+        ScheduleFilterSessionSave();
     }
 
     private string[] BuildCrossAxisWatchedList()
@@ -1150,6 +1395,9 @@ public partial class MainWindow : Window
         _pipeline.Settings.CrossAxisShield.HardLockWhenActive = CrossAxisHardLockCheckBox?.IsChecked == true;
         _pipeline.Settings.CrossAxisShield.HardLockForceCenter = CrossAxisHardLockCenterCheckBox?.IsChecked == true;
         _pipeline.Settings.CrossAxisShield.LockLeakMultiplier = CrossAxisLeakSlider?.Value ?? 0.08;
+
+        _pipeline.Settings.AxisBindLock.Enabled = AxisBindLockEnabledCheckBox?.IsChecked == true;
+        _pipeline.Settings.AxisBindLock.ToggleMode = true;
 
         if (_pipeline.Settings.SpikeGate.RadialZonesEnabled)
         {
@@ -1268,6 +1516,7 @@ public partial class MainWindow : Window
         var snapshot = FilterSettingsSnapshot.Clone(filters);
         _pipeline.LoadSettings(snapshot);
         ApplyFiltersToUi(snapshot);
+        UpdateAxisBindLockStatusText();
         _filterSessionDirty = false;
     }
 
@@ -1275,6 +1524,123 @@ public partial class MainWindow : Window
     {
         SyncFilterPipelineFromUi();
         return FilterSettingsSnapshot.Clone(_pipeline.Settings);
+    }
+
+    private FilterSessionState CaptureSessionFromUi()
+    {
+        SyncFilterPipelineFromUi();
+        var selectedDevice = DeviceComboBox.SelectedItem as InputDeviceInfo;
+        var selectedAxis = AxisComboBox.SelectedItem as InputAxisInfo;
+
+        return new FilterSessionState
+        {
+            SchemaVersion = FilterSessionState.CurrentSchemaVersion,
+            ProfileName = GetCurrentProfileName(),
+            UserModified = true,
+            Filters = FilterSettingsSnapshot.Clone(_pipeline.Settings),
+            DeviceId = selectedDevice?.Id ?? string.Empty,
+            DeviceName = selectedDevice?.DisplayName ?? string.Empty,
+            AxisId = selectedAxis?.Id ?? NormalizeAxisId(_profile.AxisName),
+            PollingHz = Math.Max(20, (int)PollingSlider.Value),
+            OutputSink = GetSelectedOutputSinkKey(),
+            VJoyDeviceId = Math.Clamp(_preferences.VJoyDeviceId, 1, 16),
+            Calibration = new CalibrationSettings
+            {
+                Min = CalibrationMinSlider.Value,
+                Center = CalibrationCenterSlider.Value,
+                Max = CalibrationMaxSlider.Value
+            },
+            MonitorChartEnabledAxes = _monitorChartAxes.GetEnabledAxisIdsSnapshot(),
+            Ui = CaptureUiPreferencesFromUi(),
+        };
+    }
+
+    private SessionUiPreferences CaptureUiPreferencesFromUi()
+    {
+        SyncPreferencesFromUi();
+        return new SessionUiPreferences
+        {
+            LoggingEnabled = _preferences.LoggingEnabled,
+            ResetLogOnStartup = _preferences.ResetLogOnStartup,
+            ShowFilterHints = _preferences.ShowFilterHints,
+            AutoApplyInApp = _preferences.AutoApplyInApp,
+            StartWithWindows = _preferences.StartWithWindows,
+            UiLanguage = _preferences.UiLanguage,
+        };
+    }
+
+    private void SyncPreferencesFromUi()
+    {
+        if (EnableLoggingCheckBox != null)
+            _preferences.LoggingEnabled = EnableLoggingCheckBox.IsChecked == true;
+        if (ResetLogOnStartupCheckBox != null)
+            _preferences.ResetLogOnStartup = ResetLogOnStartupCheckBox.IsChecked == true;
+        if (ShowHintsCheckBox != null)
+            _preferences.ShowFilterHints = ShowHintsCheckBox.IsChecked == true;
+        if (AutoApplyInAppCheckBox != null)
+            _preferences.AutoApplyInApp = AutoApplyInAppCheckBox.IsChecked == true;
+        if (StartWithWindowsCheckBox != null)
+            _preferences.StartWithWindows = StartWithWindowsCheckBox.IsChecked == true;
+        if (LanguageComboBox?.SelectedItem is ComboBoxItem langItem)
+            _preferences.UiLanguage = (langItem.Content?.ToString() ?? "RU").ToUpperInvariant();
+    }
+
+    private async Task ApplySessionUiPreferencesAsync(SessionUiPreferences? ui)
+    {
+        if (ui == null)
+            return;
+
+        _preferences.LoggingEnabled = ui.LoggingEnabled;
+        _preferences.ResetLogOnStartup = ui.ResetLogOnStartup;
+        _preferences.ShowFilterHints = ui.ShowFilterHints;
+        _preferences.AutoApplyInApp = ui.AutoApplyInApp;
+        _preferences.StartWithWindows = ui.StartWithWindows;
+        _preferences.UiLanguage = string.IsNullOrWhiteSpace(ui.UiLanguage) ? "RU" : ui.UiLanguage.ToUpperInvariant();
+        _diagnostics.Enabled = _preferences.LoggingEnabled;
+
+        ApplyPreferencesToUi();
+        ApplyLanguageFromPreferences();
+        await _preferencesStore.SaveAsync(_preferences).ConfigureAwait(true);
+    }
+
+    private async Task ApplySessionToUiAsync(FilterSessionState session)
+    {
+        if (!string.IsNullOrWhiteSpace(session.ProfileName))
+            ProfileNameTextBox.Text = session.ProfileName;
+
+        ApplyFilterSettings(session.Filters);
+
+        PollingSlider.Value = Math.Clamp(session.PollingHz, 20, 500);
+        PollingValueTextBlock.Text = ((int)PollingSlider.Value).ToString();
+
+        SelectOutputSink(string.IsNullOrWhiteSpace(session.OutputSink) ? "vJoy" : session.OutputSink);
+        _preferences.VJoyDeviceId = Math.Clamp(session.VJoyDeviceId, 1, 16);
+        _vJoySink.Configure((uint)_preferences.VJoyDeviceId);
+
+        CalibrationMinSlider.Value = session.Calibration.Min;
+        CalibrationCenterSlider.Value = session.Calibration.Center;
+        CalibrationMaxSlider.Value = session.Calibration.Max;
+
+        _profile.Calibration = session.Calibration;
+
+        if (!string.IsNullOrWhiteSpace(session.DeviceId))
+        {
+            await RefreshDevicesAsync().ConfigureAwait(true);
+            DeviceComboBox.SelectedValue = session.DeviceId;
+            await RefreshAxesAsync().ConfigureAwait(true);
+            if (!string.IsNullOrWhiteSpace(session.AxisId))
+                AxisComboBox.SelectedValue = NormalizeAxisId(session.AxisId);
+        }
+
+        _monitorChartAxes.ApplyEnabledAxisSnapshot(session.MonitorChartEnabledAxes);
+        EnsureMonitorAxisToggles();
+        SyncMonitorAxisToggles();
+
+        await ApplySessionUiPreferencesAsync(session.Ui).ConfigureAwait(true);
+
+        UpdateProfileTitle();
+        UpdateChartLegend();
+        SyncFilterUiText();
     }
 
     private void ApplyFiltersToUi(FilterSettings filters)
@@ -1351,6 +1717,14 @@ public partial class MainWindow : Window
         if (CrossAxisLeakSlider != null)
             CrossAxisLeakSlider.Value = Math.Clamp(filters.CrossAxisShield.LockLeakMultiplier, 0.0, 0.35);
 
+        if (AxisBindLockEnabledCheckBox != null)
+            AxisBindLockEnabledCheckBox.IsChecked = filters.AxisBindLock.Enabled;
+        _pipeline.Settings.AxisBindLock = FilterSettingsSnapshot.Clone(new FilterSettings
+        {
+            AxisBindLock = filters.AxisBindLock
+        }).AxisBindLock;
+        UpdateAxisBindLockStatusText();
+
         if (filters.SpikeGate.RadialZonesEnabled)
         {
             SpikeDeltaSlider.Value = filters.SpikeGate.OuterDeltaThreshold;
@@ -1405,12 +1779,14 @@ public partial class MainWindow : Window
     private async void DeviceComboBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         await RefreshAxesAsync();
+        ScheduleFilterSessionSave();
     }
 
     private void PollingSlider_OnValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (PollingValueTextBlock != null)
             PollingValueTextBlock.Text = ((int)PollingSlider.Value).ToString();
+        ScheduleFilterSessionSave();
     }
 
     private void ProfileNameTextBox_OnTextChanged(object sender, TextChangedEventArgs e)
@@ -1432,6 +1808,7 @@ public partial class MainWindow : Window
 
         StatusTextBlock.Text = $"{T("label.output")}: {sink.Name}";
         _preferences.OutputSink = GetSelectedOutputSinkKey();
+        ScheduleFilterSessionSave();
     }
 
     private async void DetectAxisButton_OnClick(object sender, RoutedEventArgs e)
@@ -1485,11 +1862,14 @@ public partial class MainWindow : Window
         if (CalibrationCenterSlider.Value >= CalibrationMaxSlider.Value)
             CalibrationCenterSlider.Value = CalibrationMaxSlider.Value - 0.01;
         SyncFilterUiText();
+        ScheduleFilterSessionSave();
     }
 
     private void FilterSettingChanged(object sender, RoutedEventArgs e)
     {
         OnUserFilterChanged();
+        if (sender == AxisBindLockEnabledCheckBox)
+            RefreshBindLockPollingIfRunning();
     }
 
     private void FilterSliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -1512,80 +1892,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        try
-        {
-            SyncFilterPipelineFromUi();
-            _profile = BuildProfileFromUi();
-            _pipeline.Reset();
-            _lastAxesSnapshot = null;
-            _lastAxesSnapshotTimestamp = default;
-            _axisIntentTracker.Reset();
-            _crossAxisLockSmoother.Reset();
-            _crossAxisActivityLatched = false;
-            _otherAxisSustainedSamples = 0;
-            _lastPollTimestamp = default;
-            _lastLoggedSpikeCount = 0;
-            _lastLoggedHampelCount = 0;
-            _saturatedRawSamples = 0;
-            _saturationWarned = false;
-
-            lock (_historySync)
-            {
-                _rawHistory.Clear();
-                _filteredHistory.Clear();
-                _monitorChartAxes.Clear();
-            }
-
-            var sink = GetSelectedOutputSink();
-            if (sink == null)
-            {
-                SetStatus("status.selectDevice");
-                return;
-            }
-
-            if (!sink.IsAvailable)
-            {
-                if (sink is VJoyOutputSink)
-                    SetStatus("status.vjoyMissing");
-                else
-                    SetStatus("status.outputUnavailable", sink.Name);
-                return;
-            }
-
-            if (sink is VJoyOutputSink vJoySink)
-                vJoySink.Configure((uint)Math.Clamp(_preferences.VJoyDeviceId, 1, 16));
-
-            _activeOutputSink = sink;
-            await sink.BeginSessionAsync(axisId).ConfigureAwait(true);
-
-            _streamAxisId = axisId;
-            UpdateChartLegend();
-            LogMonitorChartAxesSelection("stream-start");
-            _streamPollingHz = Math.Max(20, (int)PollingSlider.Value);
-            _isRunning = true;
-            _inputProvider.Start(deviceId, axisId, _streamPollingHz);
-            SetStatus("status.running", deviceId, axisId);
-            if (sink is VJoyOutputSink)
-                SetStatus("status.vjoyActive", _preferences.VJoyDeviceId);
-
-            _diagnostics.LogAppEvent(
-                "stream-start",
-                $"device={deviceId}; axis={axisId}; hz={(int)PollingSlider.Value}; sink={GetSelectedOutputSinkKey()}; vjoyDevice={_preferences.VJoyDeviceId}");
-            if (sink is VJoyOutputSink activeVJoy && activeVJoy.LastError != null)
-                _diagnostics.LogAppEvent("vjoy-warning", activeVJoy.LastError);
-            LogCurrentSettings();
-        }
-        catch (Exception ex)
-        {
-            _isRunning = false;
-            _activeOutputSink = null;
-            await EndActiveOutputSessionAsync().ConfigureAwait(true);
-            if (ex.Message.Contains("used by another application", StringComparison.OrdinalIgnoreCase))
-                SetStatus("status.vjoyBusy", _preferences.VJoyDeviceId);
-            else
-                StatusTextBlock.Text = ex.Message;
-            _diagnostics.LogAppEvent("stream-start-error", ex.Message);
-        }
+        await TryStartStreamAsync().ConfigureAwait(true);
     }
 
     private async void StopButton_OnClick(object sender, RoutedEventArgs e)
@@ -1599,6 +1906,9 @@ public partial class MainWindow : Window
         _lastAxesSnapshotTimestamp = default;
         _axisIntentTracker.Reset();
         _crossAxisLockSmoother.Reset();
+        _axisBindLockToggleLatched = false;
+        _axisBindLockPreviousPressed = false;
+        _axisBindLockActive = false;
         _crossAxisActivityLatched = false;
         _otherAxisSustainedSamples = 0;
         _lastPollTimestamp = default;
@@ -1715,8 +2025,15 @@ public partial class MainWindow : Window
         EnsureProfileInList(profileName);
 
         _preferences.AppliedProfileName = profileName;
+        _preferences.HasAppliedSettings = true;
         _preferences.AutoApplyInApp = true;
         _preferences.StartWithWindows = dialog.StartWithWindows;
+        if (DeviceComboBox.SelectedValue is string appliedDeviceId)
+            _preferences.LastStreamDeviceId = appliedDeviceId;
+        if (AxisComboBox.SelectedValue is string appliedAxisId)
+            _preferences.LastStreamAxisId = appliedAxisId;
+        _preferences.LastStreamPollingHz = Math.Max(20, (int)PollingSlider.Value);
+        _preferences.OutputSink = GetSelectedOutputSinkKey();
         _preferences.LoggingEnabled = EnableLoggingCheckBox.IsChecked == true;
         _preferences.ShowFilterHints = ShowHintsCheckBox.IsChecked == true;
         _diagnostics.Enabled = _preferences.LoggingEnabled;
@@ -1779,6 +2096,7 @@ public partial class MainWindow : Window
         }
 
         await _preferencesStore.SaveAsync(_preferences).ConfigureAwait(true);
+        ScheduleFilterSessionSave();
     }
 
     private void ClearLogButton_OnClick(object sender, RoutedEventArgs e)
@@ -1791,6 +2109,8 @@ public partial class MainWindow : Window
     private async void ResetAppliedButton_OnClick(object sender, RoutedEventArgs e)
     {
         _preferences.AppliedProfileName = string.Empty;
+        _preferences.HasAppliedSettings = false;
+        _preferences.AgentResumeStream = false;
         _preferences.AutoApplyInApp = false;
         _preferences.StartWithWindows = false;
         _startupService.SetEnabled(false, string.Empty, string.Empty);
@@ -1867,6 +2187,16 @@ public partial class MainWindow : Window
                     var profile = await _profileStore.LoadAsync(path).ConfigureAwait(true);
                     _profile = profile;
                     LoadProfileIntoUi(profile);
+                    if (!string.IsNullOrWhiteSpace(profile.DeviceId))
+                    {
+                        DeviceComboBox.SelectedValue = profile.DeviceId;
+                        await RefreshAxesAsync().ConfigureAwait(true);
+                        if (!string.IsNullOrWhiteSpace(profile.AxisName))
+                            AxisComboBox.SelectedValue = NormalizeAxisId(profile.AxisName);
+                    }
+
+                    _filterSessionDirty = true;
+                    ScheduleFilterSessionSave();
                 }
                 catch
                 {
@@ -1888,6 +2218,7 @@ public partial class MainWindow : Window
             ApplyLanguage();
             LogCurrentSettings();
             await _preferencesStore.SaveAsync(_preferences).ConfigureAwait(true);
+            ScheduleFilterSessionSave();
         }
     }
 
@@ -1944,7 +2275,7 @@ public partial class MainWindow : Window
     }
 
     private static string GetExecutablePathForStartup()
-        => Environment.ProcessPath ?? throw new InvalidOperationException("Cannot detect executable path.");
+        => AgentLauncher.GetHostExecutablePath();
 
     private void ApplyHintsVisibility()
     {
@@ -2003,25 +2334,15 @@ public partial class MainWindow : Window
 
     private async Task AutoApplyProfileAsync(bool startStream)
     {
-        var path = GetProfileFilePath(_preferences.AppliedProfileName);
-        if (!File.Exists(path))
+        var profileName = GetCommittedAppliedProfileName();
+        if (string.IsNullOrWhiteSpace(profileName))
             return;
 
-        var profile = await _profileStore.LoadAsync(path).ConfigureAwait(true);
-        _profile = profile;
-        LoadProfileIntoUi(profile);
-
-        if (!string.IsNullOrWhiteSpace(profile.DeviceId))
-            DeviceComboBox.SelectedValue = profile.DeviceId;
-        else if (_devices.Count > 0 && DeviceComboBox.SelectedIndex < 0)
-            DeviceComboBox.SelectedIndex = 0;
-
-        await RefreshAxesAsync().ConfigureAwait(true);
-        if (!string.IsNullOrWhiteSpace(profile.AxisName))
-            AxisComboBox.SelectedValue = NormalizeAxisId(profile.AxisName);
+        if (!await LoadAppliedProfileAsync(profileName).ConfigureAwait(true))
+            return;
 
         if (startStream && !_isRunning)
-            StartButton_OnClick(this, new RoutedEventArgs());
+            await TryStartStreamAsync().ConfigureAwait(true);
     }
 
     private void UpdateProfileTitle()
@@ -2063,11 +2384,12 @@ public partial class MainWindow : Window
         try
         {
             _filterSaveTimer?.Stop();
-            var snapshot = CaptureFilterSettingsFromUi();
-            await _filterSessionStore.SaveAsync(snapshot, GetCurrentProfileName(), userModified: true)
-                .ConfigureAwait(true);
+            var session = CaptureSessionFromUi();
+            await _filterSessionStore.SaveAsync(session).ConfigureAwait(true);
             _filterSessionDirty = false;
-            _diagnostics.LogAppEvent("filters-saved", $"path={_filterSessionStore.FilePath}; forced={(force ? 1 : 0)}");
+            _diagnostics.LogAppEvent(
+                "filters-saved",
+                $"path={_filterSessionStore.FilePath}; forced={(force ? 1 : 0)}; device={session.DeviceId}; axis={session.AxisId}");
         }
         catch (Exception ex)
         {
@@ -2075,19 +2397,19 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task TryRestoreFilterSessionAsync()
+    private async Task<bool> TryRestoreFilterSessionAsync()
     {
         try
         {
             var session = await _filterSessionStore.LoadAsync().ConfigureAwait(true);
             if (session == null || !session.UserModified)
-                return;
+                return false;
 
             _filterSaveTimer?.Stop();
             _suppressFilterSessionSave = true;
             try
             {
-                ApplyFilterSettings(session.Filters);
+                await ApplySessionToUiAsync(session).ConfigureAwait(true);
             }
             finally
             {
@@ -2097,24 +2419,405 @@ public partial class MainWindow : Window
             _filterSessionDirty = false;
             _diagnostics.LogAppEvent(
                 "filters-loaded",
-                $"path={_filterSessionStore.FilePath}; savedAt={session.SavedAt:O}; profile={session.ProfileName}");
+                $"path={_filterSessionStore.FilePath}; savedAt={session.SavedAt:O}; profile={session.ProfileName}; device={session.DeviceId}; axis={session.AxisId}");
             SetStatus("status.filtersRestored");
+            return true;
         }
         catch (Exception ex)
         {
             _diagnostics.LogAppEvent("filters-load-error", ex.Message);
+            return false;
         }
     }
 
-    private Task StartStreamFromAutoApplyAsync()
+    private bool HasCommittedAppliedProfile()
     {
-        StartButton_OnClick(this, new RoutedEventArgs());
-        return Task.CompletedTask;
+        if (string.IsNullOrWhiteSpace(_preferences.AppliedProfileName))
+            return false;
+
+        if (!_preferences.HasAppliedSettings)
+        {
+            // Legacy appsettings: AppliedProfileName without flag still counts if profile file exists.
+            return File.Exists(GetProfileFilePath(_preferences.AppliedProfileName));
+        }
+
+        return true;
+    }
+
+    private string? GetCommittedAppliedProfileName()
+    {
+        if (!HasCommittedAppliedProfile())
+            return null;
+
+        return _preferences.AppliedProfileName.Trim();
+    }
+
+    private bool ShouldRunBackgroundStreamWorkflow()
+    {
+        if (_isRunning)
+            return false;
+
+        if (App.IsAgentMode || _preferences.AgentResumeStream)
+            return HasCommittedAppliedProfile();
+
+        return _preferences.AutoApplyInApp && HasCommittedAppliedProfile();
+    }
+
+    private async Task TryRunBackgroundStreamWorkflowAsync()
+    {
+        if (!ShouldRunBackgroundStreamWorkflow())
+            return;
+
+        if (App.AgentStartupDelayMs > 0)
+            await Task.Delay(App.AgentStartupDelayMs).ConfigureAwait(true);
+
+        var profileName = GetCommittedAppliedProfileName();
+        if (string.IsNullOrWhiteSpace(profileName))
+        {
+            _diagnostics.LogAppEvent("agent-workflow", "skip:no-applied-profile");
+            return;
+        }
+
+        if (!File.Exists(GetProfileFilePath(profileName)))
+        {
+            _diagnostics.LogAppEvent("agent-workflow", $"skip:profile-missing; name={profileName}");
+            return;
+        }
+
+        _diagnostics.LogAppEvent(
+            "agent-workflow",
+            $"mode={(App.IsAgentMode ? "agent" : "auto")}; appliedProfile={profileName}; handoff={_preferences.AgentResumeStream}");
+
+        var maxAttempts = App.IsAgentMode || _preferences.AgentResumeStream ? 45 : 1;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                if (!await LoadAppliedProfileAsync(profileName).ConfigureAwait(true))
+                {
+                    _diagnostics.LogAppEvent("agent-workflow", $"profile-load-failed; name={profileName}");
+                    return;
+                }
+
+                await TryRestoreFilterSessionAsync().ConfigureAwait(true);
+
+                var sinkKey = string.IsNullOrWhiteSpace(_preferences.OutputSink) ? "vJoy" : _preferences.OutputSink;
+                SelectOutputSink(sinkKey);
+                _vJoySink.Configure((uint)Math.Clamp(_preferences.VJoyDeviceId, 1, 16));
+                VJoyOutputSink.TryReleaseStale((uint)Math.Clamp(_preferences.VJoyDeviceId, 1, 16));
+
+                if (!await TrySelectStreamDeviceAndAxisAsync().ConfigureAwait(true))
+                {
+                    if (attempt < maxAttempts)
+                    {
+                        await Task.Delay(2000).ConfigureAwait(true);
+                        continue;
+                    }
+
+                    _diagnostics.LogAppEvent("agent-workflow", "device-axis-unavailable");
+                    return;
+                }
+
+                if (PollingSlider != null && _preferences.LastStreamPollingHz >= 20)
+                    PollingSlider.Value = _preferences.LastStreamPollingHz;
+
+                if (await TryStartStreamAsync().ConfigureAwait(true))
+                {
+                    if (_preferences.AgentResumeStream)
+                    {
+                        _preferences.AgentResumeStream = false;
+                        await _preferencesStore.SaveAsync(_preferences).ConfigureAwait(true);
+                    }
+
+                    _diagnostics.LogAppEvent("agent-workflow", $"stream-running; attempt={attempt}");
+                    return;
+                }
+
+                if (attempt < maxAttempts)
+                    await Task.Delay(2000).ConfigureAwait(true);
+            }
+            catch (Exception ex)
+            {
+                _diagnostics.LogAppEvent("agent-workflow-error", $"attempt={attempt}; {ex.Message}");
+                if (attempt >= maxAttempts)
+                    break;
+
+                await Task.Delay(2000).ConfigureAwait(true);
+            }
+        }
+    }
+
+    private async Task<bool> LoadAppliedProfileAsync(string profileName)
+    {
+        var path = GetProfileFilePath(profileName);
+        if (!File.Exists(path))
+            return false;
+
+        var profile = await _profileStore.LoadAsync(path).ConfigureAwait(true);
+        _profile = profile;
+        LoadProfileIntoUi(profile);
+
+        if (!string.IsNullOrWhiteSpace(profile.DeviceId))
+            DeviceComboBox.SelectedValue = profile.DeviceId;
+        else if (_devices.Count > 0 && DeviceComboBox.SelectedIndex < 0)
+            DeviceComboBox.SelectedIndex = 0;
+
+        await RefreshAxesAsync().ConfigureAwait(true);
+        if (!string.IsNullOrWhiteSpace(profile.AxisName))
+            AxisComboBox.SelectedValue = NormalizeAxisId(profile.AxisName);
+
+        return true;
+    }
+
+    private async Task<bool> TrySelectStreamDeviceAndAxisAsync()
+    {
+        await RefreshDevicesAsync().ConfigureAwait(true);
+
+        if (!string.IsNullOrWhiteSpace(_preferences.LastStreamDeviceId))
+            DeviceComboBox.SelectedValue = _preferences.LastStreamDeviceId;
+
+        var deviceId = DeviceComboBox.SelectedValue as string;
+        if (string.IsNullOrWhiteSpace(deviceId))
+        {
+            if (_devices.Count > 0)
+                DeviceComboBox.SelectedIndex = 0;
+            deviceId = DeviceComboBox.SelectedValue as string;
+        }
+
+        if (string.IsNullOrWhiteSpace(deviceId))
+            return false;
+
+        await RefreshAxesAsync().ConfigureAwait(true);
+
+        var preferredAxis = NormalizeAxisId(_preferences.LastStreamAxisId);
+        if (!string.IsNullOrWhiteSpace(preferredAxis))
+            AxisComboBox.SelectedValue = preferredAxis;
+
+        if (AxisComboBox.SelectedValue is not string selectedAxis || string.IsNullOrWhiteSpace(selectedAxis))
+        {
+            if (!string.IsNullOrWhiteSpace(_profile.AxisName))
+                AxisComboBox.SelectedValue = NormalizeAxisId(_profile.AxisName);
+            else if (_axes.Count > 0)
+                AxisComboBox.SelectedIndex = 0;
+        }
+
+        return AxisComboBox.SelectedValue is string axis && !string.IsNullOrWhiteSpace(axis);
+    }
+
+    private async Task<bool> TryStartStreamAsync()
+    {
+        if (DeviceComboBox.SelectedValue is not string deviceId || string.IsNullOrWhiteSpace(deviceId))
+        {
+            SetStatus("status.selectDevice");
+            return false;
+        }
+
+        if (AxisComboBox.SelectedValue is not string axisId || string.IsNullOrWhiteSpace(axisId))
+        {
+            SetStatus("status.selectAxis");
+            return false;
+        }
+
+        try
+        {
+            SyncFilterPipelineFromUi();
+            _profile = BuildProfileFromUi();
+            _pipeline.Reset();
+            _lastAxesSnapshot = null;
+            _lastAxesSnapshotTimestamp = default;
+            _axisIntentTracker.Reset();
+            _crossAxisLockSmoother.Reset();
+            _crossAxisActivityLatched = false;
+            _otherAxisSustainedSamples = 0;
+            _lastPollTimestamp = default;
+            _lastLoggedSpikeCount = 0;
+            _lastLoggedHampelCount = 0;
+            _saturatedRawSamples = 0;
+            _saturationWarned = false;
+
+            lock (_historySync)
+            {
+                _rawHistory.Clear();
+                _filteredHistory.Clear();
+                _monitorChartAxes.Clear();
+            }
+
+            var sink = GetSelectedOutputSink();
+            if (sink == null)
+            {
+                SetStatus("status.selectDevice");
+                return false;
+            }
+
+            if (!sink.IsAvailable)
+            {
+                if (sink is VJoyOutputSink)
+                    SetStatus("status.vjoyMissing");
+                else
+                    SetStatus("status.outputUnavailable", sink.Name);
+                return false;
+            }
+
+            if (sink is VJoyOutputSink vJoySink)
+                vJoySink.Configure((uint)Math.Clamp(_preferences.VJoyDeviceId, 1, 16));
+
+            _activeOutputSink = sink;
+            await sink.BeginSessionAsync(axisId).ConfigureAwait(true);
+
+            _streamAxisId = axisId;
+            UpdateChartLegend();
+            LogMonitorChartAxesSelection("stream-start");
+            _streamPollingHz = Math.Max(20, (int)PollingSlider.Value);
+            _isRunning = true;
+            _inputProvider.Start(deviceId, axisId, _streamPollingHz, CreateBindLockPollConfig());
+            await SaveStreamSessionToPreferencesAsync().ConfigureAwait(true);
+            SetStatus("status.running", deviceId, axisId);
+            if (sink is VJoyOutputSink)
+                SetStatus("status.vjoyActive", _preferences.VJoyDeviceId);
+
+            _diagnostics.LogAppEvent(
+                "stream-start",
+                $"device={deviceId}; axis={axisId}; hz={(int)PollingSlider.Value}; sink={GetSelectedOutputSinkKey()}; vjoyDevice={_preferences.VJoyDeviceId}; agent={App.IsAgentMode}");
+            if (sink is VJoyOutputSink activeVJoy && activeVJoy.LastError != null)
+                _diagnostics.LogAppEvent("vjoy-warning", activeVJoy.LastError);
+            LogCurrentSettings();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _isRunning = false;
+            _activeOutputSink = null;
+            await EndActiveOutputSessionAsync().ConfigureAwait(true);
+            if (ex.Message.Contains("used by another application", StringComparison.OrdinalIgnoreCase))
+                SetStatus("status.vjoyBusy", _preferences.VJoyDeviceId);
+            else
+                StatusTextBlock.Text = ex.Message;
+            _diagnostics.LogAppEvent("stream-start-error", ex.Message);
+            return false;
+        }
+    }
+
+    private async Task SaveStreamSessionToPreferencesAsync()
+    {
+        if (DeviceComboBox.SelectedValue is string deviceId)
+            _preferences.LastStreamDeviceId = deviceId;
+        if (AxisComboBox.SelectedValue is string axisId)
+            _preferences.LastStreamAxisId = axisId;
+        _preferences.LastStreamPollingHz = Math.Max(20, (int)PollingSlider.Value);
+        _preferences.OutputSink = GetSelectedOutputSinkKey();
+        await _preferencesStore.SaveAsync(_preferences).ConfigureAwait(true);
+    }
+
+    private void MainWindow_OnClosing(object? sender, CancelEventArgs e)
+    {
+        if (_closeAfterHandoff || App.IsAgentMode || !_isRunning || _handoffInProgress)
+            return;
+
+        if (!HasCommittedAppliedProfile())
+        {
+            _diagnostics.LogAppEvent("agent-handoff", "skip:no-applied-profile");
+            return;
+        }
+
+        e.Cancel = true;
+        ShowInTaskbar = false;
+        Hide();
+        _ = PerformHandoffThenCloseAsync();
+    }
+
+    private async Task PerformHandoffThenCloseAsync()
+    {
+        if (_handoffInProgress)
+            return;
+
+        _handoffInProgress = true;
+        ShowInTaskbar = false;
+        Hide();
+        try
+        {
+            if (IsFilterControlsReady())
+                SyncFilterPipelineFromUi();
+
+            await SaveFilterSessionAsync(force: true).ConfigureAwait(true);
+            if (!await SaveHandoffPreferencesAsync().ConfigureAwait(true))
+            {
+                FinishHandoffShutdown();
+                return;
+            }
+
+            AgentLauncher.LaunchDetached(delayMs: 1500);
+            _agentSpawnedForHandoff = true;
+            _diagnostics.LogAppEvent(
+                "agent-handoff",
+                $"spawned; appliedProfile={_preferences.AppliedProfileName}");
+
+            await Task.Delay(250).ConfigureAwait(true);
+
+            FinishHandoffShutdown();
+        }
+        catch (Exception ex)
+        {
+            _diagnostics.LogAppEvent("agent-handoff-error", ex.Message);
+            FinishHandoffShutdown();
+        }
+        finally
+        {
+            _handoffInProgress = false;
+        }
+    }
+
+    private void FinishHandoffShutdown()
+    {
+        _closeAfterHandoff = true;
+        Application.Current.Shutdown();
+    }
+
+    private async Task<bool> SaveHandoffPreferencesAsync()
+    {
+        if (DeviceComboBox.SelectedValue is string deviceId)
+            _preferences.LastStreamDeviceId = deviceId;
+        if (AxisComboBox.SelectedValue is string axisId)
+            _preferences.LastStreamAxisId = axisId;
+        _preferences.LastStreamPollingHz = Math.Max(20, _streamPollingHz);
+        _preferences.OutputSink = GetSelectedOutputSinkKey();
+        _preferences.AgentResumeStream = true;
+
+        try
+        {
+            await _preferencesStore.SaveAsync(_preferences).ConfigureAwait(true);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _diagnostics.LogAppEvent("agent-handoff-error", $"prefs: {ex.Message}");
+            return false;
+        }
     }
 
     protected override async void OnClosed(EventArgs e)
     {
         var wasRunning = _isRunning;
+
+        if (!_agentSpawnedForHandoff && wasRunning && !App.IsAgentMode)
+        {
+            if (IsFilterControlsReady())
+                SyncFilterPipelineFromUi();
+            await SaveFilterSessionAsync(force: true).ConfigureAwait(true);
+            if (HasCommittedAppliedProfile() && await SaveHandoffPreferencesAsync().ConfigureAwait(true))
+            {
+                try
+                {
+                    AgentLauncher.LaunchDetached(delayMs: 1500);
+                    _agentSpawnedForHandoff = true;
+                    _diagnostics.LogAppEvent("agent-handoff", "spawned from OnClosed fallback");
+                }
+                catch (Exception ex)
+                {
+                    _diagnostics.LogAppEvent("agent-handoff-error", ex.Message);
+                }
+            }
+        }
+
         _isRunning = false;
         if (wasRunning)
             _inputProvider.Stop();
@@ -2122,8 +2825,12 @@ public partial class MainWindow : Window
         _activeOutputSink = null;
         _inputProvider.ReadingAvailable -= InputProviderOnReadingAvailable;
         _inputProvider.Dispose();
-        await SaveFilterSessionAsync(force: true).ConfigureAwait(true);
-        _diagnostics.LogAppEvent("app-close", "window closed");
+
+        _diagnostics.LogAppEvent(
+            "app-close",
+            wasRunning
+                ? $"window closed; handoff={(_agentSpawnedForHandoff ? 1 : 0)}; profile={_preferences.AppliedProfileName}"
+                : "window closed");
         base.OnClosed(e);
     }
 

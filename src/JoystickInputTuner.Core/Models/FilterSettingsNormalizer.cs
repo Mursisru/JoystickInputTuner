@@ -2,9 +2,9 @@ namespace JoystickInputTuner.Core.Models;
 
 public static class FilterSettingsNormalizer
 {
-    private static readonly HashSet<string> LinearWatchAxes = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> AllowedWatchAxes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "X", "Y"
+        "X", "Y", "Z", "RX", "RY", "RZ", "SL0", "SL1",
     };
 
     public static FilterSettings Ensure(FilterSettings? settings)
@@ -17,19 +17,39 @@ public static class FilterSettingsNormalizer
         settings.ZImpulseGuard ??= new ZImpulseGuardSettings();
         settings.AxisIntent ??= new AxisIntentSettings();
         settings.CrossAxisShield ??= new CrossAxisShieldSettings();
+        settings.AxisBindLock ??= new AxisBindLockSettings();
         settings.RateLimiter ??= new RateLimiterSettings();
         settings.Ema ??= new EmaSettings();
 
         SanitizeCrossAxisShield(settings.CrossAxisShield);
+        SanitizeAxisBindLock(settings.AxisBindLock);
         SanitizeSpikeGate(settings.SpikeGate);
         return settings;
+    }
+
+    private static void SanitizeAxisBindLock(AxisBindLockSettings bind)
+    {
+        bind.BindDeviceId ??= string.Empty;
+        bind.BindDeviceKind ??= string.Empty;
+        bind.LockAnchor = Math.Clamp(bind.LockAnchor, -1.0, 1.0);
+        if (bind.ButtonIndex < -1)
+            bind.ButtonIndex = -1;
+
+        bind.ToggleMode = true;
+
+        if (string.IsNullOrWhiteSpace(bind.BindDeviceKind) && bind.KeyCode >= 0)
+            bind.BindDeviceKind = "Keyboard";
+        else if (string.IsNullOrWhiteSpace(bind.BindDeviceKind) && bind.ButtonIndex >= 0 && !string.IsNullOrWhiteSpace(bind.BindDeviceId))
+            bind.BindDeviceKind = "Joystick";
+        else if (string.IsNullOrWhiteSpace(bind.BindDeviceKind) && bind.ButtonIndex >= 0)
+            bind.BindDeviceKind = "Mouse";
     }
 
     private static void SanitizeCrossAxisShield(CrossAxisShieldSettings shield)
     {
         shield.WatchedAxes ??= ["X", "Y"];
         shield.WatchedAxes = shield.WatchedAxes
-            .Where(axis => LinearWatchAxes.Contains(axis))
+            .Where(axis => AllowedWatchAxes.Contains(axis))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 

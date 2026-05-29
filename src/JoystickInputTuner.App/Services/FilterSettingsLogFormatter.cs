@@ -29,6 +29,7 @@ public static class FilterSettingsLogFormatter
         AppendZGuard(sb, settings.ZImpulseGuard);
         AppendAxisIntent(sb, settings.AxisIntent);
         AppendCrossShield(sb, settings.CrossAxisShield);
+        AppendAxisBindLock(sb, settings.AxisBindLock);
         AppendRateLimiter(sb, settings.RateLimiter);
         AppendEma(sb, settings.Ema);
         return sb.ToString();
@@ -115,6 +116,16 @@ public static class FilterSettingsLogFormatter
         sb.Append("; crossLock=").Append(s.HardLockWhenActive ? "on" : "off");
         sb.Append("; crossLockCenter=").Append(s.HardLockForceCenter ? "on" : "off");
         sb.Append("; crossLeak=").AppendFormat(CultureInfo.InvariantCulture, "{0:0.00}", s.LockLeakMultiplier);
+    }
+
+    private static void AppendAxisBindLock(StringBuilder sb, AxisBindLockSettings s)
+    {
+        sb.Append("; axisBindLock=").Append(s.Enabled ? "on" : "off");
+        sb.Append("; axisBindKind=").Append(string.IsNullOrWhiteSpace(s.BindDeviceKind) ? "-" : s.BindDeviceKind);
+        sb.Append("; axisBindDevice=").Append(string.IsNullOrWhiteSpace(s.BindDeviceId) ? "-" : s.BindDeviceId);
+        sb.Append("; axisBindBtn=").Append(s.ButtonIndex);
+        sb.Append("; axisBindKey=").Append(s.KeyCode);
+        sb.Append("; axisBindAnchor=").AppendFormat(CultureInfo.InvariantCulture, "{0:0.000}", s.LockAnchor);
     }
 
     private static void AppendRateLimiter(StringBuilder sb, RateLimiterSettings s)

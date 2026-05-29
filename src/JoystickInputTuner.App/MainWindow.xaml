@@ -193,7 +193,7 @@
                     <TextBlock x:Name="AppSubtitleTextBlock" Foreground="#A0A0A0" Margin="0,4,0,0"
                                Text="Yaw axis spike filter"/>
                     <TextBlock x:Name="AppVersionTextBlock" Foreground="#808080" Margin="0,2,0,0" FontSize="12"
-                               Text="1.0.0 Build DEV1P16"/>
+                               Text="2.0.0"/>
                 </StackPanel>
 
                 <TextBlock x:Name="ProfilesHeaderTextBlock" Grid.Row="1" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,6"
@@ -302,6 +302,27 @@
                                         <TextBlock x:Name="MovementHintTextBlock" Grid.Row="5" Grid.ColumnSpan="2" Foreground="#A0A0A0" TextWrapping="Wrap"
                                                    Text="Tip: click Detect axis, then move the joystick axis you want to use."/>
                                     </Grid>
+
+                                    <TextBlock x:Name="AxisBindLockHeaderTextBlock" FontSize="18" FontWeight="SemiBold" Margin="0,14,0,8"
+                                               Text="Axis lock by button"/>
+                                    <CheckBox x:Name="AxisBindLockEnabledCheckBox" Content="Lock selected axis at center when bind is active"
+                                              Margin="0,0,0,8" Checked="FilterSettingChanged" Unchecked="FilterSettingChanged"/>
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock x:Name="AxisBindLockStatusTextBlock" Grid.Row="0"
+                                                   Foreground="#C8C8C8" Text="Bind: not set" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                        <WrapPanel Grid.Row="1" Orientation="Horizontal">
+                                            <Button x:Name="AxisBindLockBindButton" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0"
+                                                    Content="Bind button…" Click="AxisBindLockBindButton_OnClick"/>
+                                            <Button x:Name="AxisBindLockClearButton" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0"
+                                                    Content="Сброс бинда" Click="AxisBindLockClearButton_OnClick"/>
+                                        </WrapPanel>
+                                    </Grid>
+                                    <TextBlock x:Name="AxisBindLockHintTextBlock" Foreground="#A0A0A0" TextWrapping="Wrap"
+                                               Text="Blocks filtered output on the stream axis (vJoy). Bind: press any controller button within 5 s. Each press toggles lock on/off."/>
                                 </StackPanel>
                             </Border>
 
@@ -690,12 +711,9 @@
                                     <Polyline x:Name="RawPolyline" Panel.ZIndex="5" Stroke="#EF4444" StrokeThickness="1.5" SnapsToDevicePixels="True"/>
                                     <Polyline x:Name="FilteredPolyline" Panel.ZIndex="6" Stroke="#22C55E" StrokeThickness="2" SnapsToDevicePixels="True"/>
                                 </Canvas>
-                                <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,8,0" Padding="6"
-                                        Background="#AA000000" CornerRadius="4" MaxWidth="220">
-                                    <StackPanel x:Name="ChartLegendPanel">
-                                        <TextBlock x:Name="LegendRawTextBlock" Foreground="#EF4444" Text="Raw"/>
-                                        <TextBlock x:Name="LegendFilteredTextBlock" Foreground="#22C55E" Text="Filtered"/>
-                                    </StackPanel>
+                                <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,8,0" Padding="8,6"
+                                        Background="#CC000000" CornerRadius="4" MaxWidth="280">
+                                    <StackPanel x:Name="ChartLegendPanel"/>
                                 </Border>
                             </Grid>
                         </Border>

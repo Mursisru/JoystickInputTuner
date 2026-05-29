@@ -96,7 +96,8 @@ public sealed class TunerDiagnosticsLogger
         int spikeSuppressedDelta,
         int hampelOutlierDelta,
         string? chartStreamAxisId = null,
-        IReadOnlyList<string>? chartOverlayAxisIds = null)
+        IReadOnlyList<string>? chartOverlayAxisIds = null,
+        bool axisBindLockActive = false)
     {
         if (!Enabled)
             return;
@@ -121,7 +122,7 @@ public sealed class TunerDiagnosticsLogger
         var chartPart = FormatChartOverlay(allAxes, chartStreamAxisId, chartOverlayAxisIds);
         var payload =
             FormattableString.Invariant(
-                $"event=movement; seq={sequence}; natural={natural:0.0000}; filtered={filtered:0.0000}; correction={delta:0.0000}; block={blockStrength:0.000}; xyActive={(otherAxesActive ? 1 : 0)}; xyPeak={otherAxesPeak:0.0000}; intent={(targetIntent ? 1 : 0)}; spike+={spikeSuppressedDelta}; hampel+={hampelOutlierDelta}") +
+                $"event=movement; seq={sequence}; natural={natural:0.0000}; filtered={filtered:0.0000}; correction={delta:0.0000}; block={blockStrength:0.000}; xyActive={(otherAxesActive ? 1 : 0)}; xyPeak={otherAxesPeak:0.0000}; intent={(targetIntent ? 1 : 0)}; axisBindLock={(axisBindLockActive ? 1 : 0)}; spike+={spikeSuppressedDelta}; hampel+={hampelOutlierDelta}") +
             axesPart +
             chartPart;
 

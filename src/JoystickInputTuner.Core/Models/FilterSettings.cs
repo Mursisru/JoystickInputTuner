@@ -16,6 +16,9 @@ public sealed class FilterSettings
 
     public CrossAxisShieldSettings CrossAxisShield { get; set; } = new();
 
+    /// <summary>Full lock of the stream axis while a joystick button is held (or toggled).</summary>
+    public AxisBindLockSettings AxisBindLock { get; set; } = new();
+
     public RateLimiterSettings RateLimiter { get; set; } = new();
 
     public EmaSettings Ema { get; set; } = new();
@@ -39,6 +42,29 @@ public sealed class AxisIntentSettings
     public int ConfirmSamplesWhileOthersActive { get; set; } = 6;
 
     public bool DisableInstantIntentWhileOthersActive { get; set; } = true;
+}
+
+public sealed class AxisBindLockSettings
+{
+    public bool Enabled { get; set; }
+
+    /// <summary>Joystick, Keyboard, or Mouse.</summary>
+    public string BindDeviceKind { get; set; } = string.Empty;
+
+    /// <summary>Device id (joystick GUID, or SYSTEM-KEYBOARD / SYSTEM-MOUSE).</summary>
+    public string BindDeviceId { get; set; } = string.Empty;
+
+    /// <summary>Joystick / mouse button index (0-based). -1 for keyboard.</summary>
+    public int ButtonIndex { get; set; } = -1;
+
+    /// <summary>Keyboard key code (SharpDX Key enum). -1 for joystick/mouse.</summary>
+    public int KeyCode { get; set; } = -1;
+
+    /// <summary>Legacy JSON; always toggle. Ignored at runtime.</summary>
+    public bool ToggleMode { get; set; } = true;
+
+    /// <summary>Filtered output while locked (usually 0 = center).</summary>
+    public double LockAnchor { get; set; } = 0.0;
 }
 
 public sealed class CrossAxisShieldSettings
