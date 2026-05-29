@@ -63,4 +63,4 @@ Legacy `%LocalAppData%\JoystickInputTuner` data is migrated on first run.
 
 ## Development
 
-Canonical source: `C:\Users\at747\source\repos\JoystickInputTuner_Engine\` (channel **DEV**). This mirror is **pre-release** (**PR-R**). Sync via robocopy per project checklist in maintainer docs.
+This mirror is **pre-release** (**PR-R**). Sync via robocopy per project checklist in maintainer docs.
