@@ -5,13 +5,6 @@
 [![.NET Framework](https://img.shields.io/badge/Platform-.NET%20Framework%204.8-512BD4)](https://dotnet.microsoft.com/download/dotnet-framework/net48) [![Version](https://img.shields.io/badge/Version-2.1.3-green)](https://github.com/Mursisru/JoystickInputTuner/releases/tag/v2.1.3)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](https://github.com/Mursisru/JoystickInputTuner/blob/main/LICENSE)
 
-
-Desktop WPF tool for joystick input diagnostics and filtering (focus on yaw-axis jitter/spikes).
-
-**Current dev build:** `2.1.3 Build DEV3P1` (shown in app title and main window).
-
-**Target release:** `2.1.3`
-
 ---
 
 ## Critical warnings
@@ -30,6 +23,12 @@ Desktop WPF tool for joystick input diagnostics and filtering (focus on yaw-axis
 
 > [!NOTE]
 > **Data lives in `_Data/` next to the exe** - profiles, filters, logs; legacy `%LocalAppData%` migrates on first run.
+
+Desktop WPF tool for joystick input diagnostics and filtering (focus on yaw-axis jitter/spikes).
+
+**Current dev build:** `2.1.3 Build DEV3P1` (shown in app title and main window).
+
+**Target release:** `2.1.3`
 
 ## Features
 
