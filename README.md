@@ -2,7 +2,8 @@
 
 # Joystick Input Tuner
 
-[![.NET Framework](https://img.shields.io/badge/Platform-.NET%20Framework%204.8-512BD4)](https://dotnet.microsoft.com/download/dotnet-framework/net48) [![Version](https://img.shields.io/badge/Version-2.1.3-green)]() [![License](https://img.shields.io/badge/License-MIT-lightgrey)](LICENSE)
+[![.NET Framework](https://img.shields.io/badge/Platform-.NET%20Framework%204.8-512BD4)](https://dotnet.microsoft.com/download/dotnet-framework/net48) [![Version](https://img.shields.io/badge/Version-2.1.3-green)](https://github.com/Mursisru/JoystickInputTuner/releases/tag/v2.1.3)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](https://github.com/Mursisru/JoystickInputTuner/blob/main/LICENSE)
 
 
 Desktop WPF tool for joystick input diagnostics and filtering (focus on yaw-axis jitter/spikes).
