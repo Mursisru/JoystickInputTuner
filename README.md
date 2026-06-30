@@ -12,6 +12,25 @@ Desktop WPF tool for joystick input diagnostics and filtering (focus on yaw-axis
 
 **Target release:** `2.1.3`
 
+---
+
+## Critical warnings
+
+> [!IMPORTANT]
+> **vJoy required for game output** - install [vJoy](https://sourceforge.net/projects/vjoy/) and enable **Device #1**; bind the **game** to the vJoy axis, not the physical stick.
+
+> [!WARNING]
+> **Do not bind the physical stick in-game** - if the game reads your real device instead of vJoy, all filtering is bypassed.
+
+> [!IMPORTANT]
+> **Apply + Start before closing the window** - closing while streaming hands off to `--agent` background process.
+
+> [!TIP]
+> **Physical stick -> app -> vJoy -> game** - the game must read the virtual device for the filtered axis.
+
+> [!NOTE]
+> **Data lives in `_Data/` next to the exe** - profiles, filters, logs; legacy `%LocalAppData%` migrates on first run.
+
 ## Features
 
 - Device and axis selection (including dynamic axis detection).
