@@ -771,8 +771,8 @@ public partial class MainWindow : Window
 
         if (_isRunning)
         {
-            lock (_historySync)
-            {
+        lock (_historySync)
+        {
                 _rawHistory.Add(output.RawValue);
                 _filteredHistory.Add(output.FilteredValue);
                 if (e.AllAxes is { Count: > 0 })
@@ -1407,9 +1407,9 @@ public partial class MainWindow : Window
         }
         else
         {
-            _pipeline.Settings.SpikeGate.DeltaThreshold = SpikeDeltaSlider.Value;
-            _pipeline.Settings.SpikeGate.VelocityThresholdPerSecond = SpikeVelocitySlider.Value;
-            _pipeline.Settings.SpikeGate.MaxConsecutiveSuppressions = (int)SpikeHoldSlider.Value;
+        _pipeline.Settings.SpikeGate.DeltaThreshold = SpikeDeltaSlider.Value;
+        _pipeline.Settings.SpikeGate.VelocityThresholdPerSecond = SpikeVelocitySlider.Value;
+        _pipeline.Settings.SpikeGate.MaxConsecutiveSuppressions = (int)SpikeHoldSlider.Value;
         }
 
         _pipeline.Settings.RateLimiter.Enabled = RateLimiterEnabledCheckBox.IsChecked == true;

@@ -1,11 +1,16 @@
 # Changelog
 
+## [2.1.3] - 2026-06-30
+
+### Changed
+- Documentation refresh: Developer header, badges, GitHub Alerts, Keywords, gitignore hygiene.
+
+
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-Pre-release (this repo): **2.1.3 Build PR-R3P1**  
-Development (Engine): **2.1.3 Build DEV3P1**
+Dev build: **2.1.3 Build DEV3P1**
 
 ## [2.1.3] — 2026-05-28
 

@@ -1,26 +1,15 @@
+**Developer:** Mursisru
+
 # Joystick Input Tuner
+
+[![.NET Framework](https://img.shields.io/badge/Platform-.NET%20Framework%204.8-512BD4)](https://dotnet.microsoft.com/download/dotnet-framework/net48) [![Version](https://img.shields.io/badge/Version-2.1.3-green)]() [![License](https://img.shields.io/badge/License-MIT-lightgrey)](LICENSE)
+
 
 Desktop WPF tool for joystick input diagnostics and filtering (focus on yaw-axis jitter/spikes).
 
-**Current pre-release build:** `2.1.3 Build PR-R3P1` (shown in app title and main window after local build).
+**Current dev build:** `2.1.3 Build DEV3P1` (shown in app title and main window).
 
 **Target release:** `2.1.3`
-
-## Getting the app
-
-This repository does **not** include `Portable/JoystickInputTuner.App.exe` (~140 MB single-file publish exceeds GitHub file limits).
-
-**Included in repo:** `Portable/vJoyInterface.dll` (required next to the exe at runtime).
-
-**Build locally:**
-
-```powershell
-dotnet build .\src\JoystickInputTuner.App\JoystickInputTuner.App.csproj -c Release
-```
-
-Output: `Portable\JoystickInputTuner.App.exe` + `Portable\vJoyInterface.dll`. User data: `Portable\_Data\` (created at runtime).
-
-Requires Windows and .NET 10 SDK.
 
 ## Features
 
@@ -29,7 +18,7 @@ Requires Windows and .NET 10 SDK.
 - **Per-axis toggles** on Monitor to show/hide overlay lines (X, Y, Z, RX, RY, RZ, SL0, SL1).
 - Filter pipeline: Deadzone, Median, Hampel, Spike Gate (radial zones, **RailHold**, **Ultra-Spike**, **Swing Bypass**), **Output Settle**, Z Impulse Guard, Cross-Axis Shield (hard lock + intent), Rate Limiter, EMA.
 - **Axis bind lock** — center the stream axis via joystick / keyboard / mouse binding (toggle on press).
-- **Filter session v3** — `_Data/filters.json` saves filters, device/axis/polling, calibration, monitor toggles, and UI preferences.
+- **Filter session v3** — `_Data/filters.json` saves filters, device/axis/polling, calibration, monitor toggles, and UI preferences (debounced; restored on launch).
 - Profile save/load (JSON) — full device + filter snapshot via **Save profile**.
 - Embedded **T.A320 Pilot** default profile (portable seed).
 - RU/EN interface.
@@ -44,6 +33,8 @@ Requires Windows and .NET 10 SDK.
 2. In the app, select output **vJoy Virtual Device**, press **Apply** on your profile, then **Start**.
 3. In the game, bind yaw (or the tuned axis) to the matching axis on the **vJoy Device** (not the physical stick).
 
+The physical device is read by this app; the game should use the vJoy device for the filtered axis.
+
 ## Handoff to background agent
 
 1. **Apply** a profile and **Start** the stream.
@@ -54,13 +45,33 @@ Requires Windows and .NET 10 SDK.
 
 Application data is stored near the executable in:
 
-- `_Data/appsettings.json` — UI language, logging, auto-apply, agent resume, **ResetLogOnStartup**
-- `_Data/profiles/*.json` — named profiles
-- `_Data/filters.json` — filter session v3
-- `_Data/logs/tuner_YYYYMMDD.log` — diagnostics
+- `_Data/appsettings.json` — UI language, logging, auto-apply, agent resume flags, **ResetLogOnStartup**
+- `_Data/profiles/*.json` — named profiles (Save profile)
+- `_Data/filters.json` — filter session v3 (filters + input/monitor/UI state)
+- `_Data/logs/tuner_YYYYMMDD.log` — movement, monitor, settings, chart axis selection
 
-Legacy `%LocalAppData%\JoystickInputTuner` data is migrated on first run.
+If legacy data exists in `%LocalAppData%\JoystickInputTuner`, it is migrated automatically on first run.
 
-## Development
+## Build
 
-This mirror is **pre-release** (**PR-R**). Sync via robocopy per project checklist in maintainer docs.
+```powershell
+dotnet build .\src\JoystickInputTuner.App\JoystickInputTuner.App.csproj -c Release
+```
+
+Requires Windows and .NET 10 SDK.
+
+## Portable (local)
+
+Every **Release** build copies a self-contained single-file app to:
+
+- `Portable/JoystickInputTuner.App.exe` (~140 MB; **not** committed to GitHub — build locally)
+- `Portable/vJoyInterface.dll`
+- `Portable/_Data/` — fresh defaults each build (T.A320 profile seed, EN UI). Runtime changes persist in `_Data` beside the exe.
+
+Run: `Portable\JoystickInputTuner.App.exe` (keep `vJoyInterface.dll` in the same folder).
+
+---
+
+## Keywords
+
+windows, wpf, dotnet-framework, joystickinputtuner, csharp
